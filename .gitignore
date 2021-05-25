@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Local file for practicing/testing
+pract.cpp
+
+# Ignore all text files
+*.txt
