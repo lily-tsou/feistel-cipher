@@ -4,16 +4,17 @@
 #include<fstream>
 #include<iostream>
 #include<string>
-using namespace std;
+#include<bitset>
+#include<array>
 
-unsigned char key[10] = {0};
-unsigned char original_k[10] = {0};
-unsigned char subkeys[20][12] = {0};
+
+using namespace std;
+uint8_t original_k[10] = {0};
 unsigned short w[4] = {0};
 unsigned short r[4] = {0};
 unsigned short c[4] = {0};
 unsigned short y[4] = {0};
-unsigned char ftable [16][16] = 
+uint8_t ftable [16][16] = 
 {{0xa3,0xd7,0x09,0x83,0xf8,0x48,0xf6,0xf4,0xb3, 0x21,0x15,0x78,0x99,0xb1,0xaf,0xf9},
   {0xe7,0x2d,0x4d,0x8a,0xce,0x4c,0xca,0x2e,0x52,0x95,0xd9,0x1e,0x4e,0x38,0x44,0x28},
   {0x0a,0xdf,0x02,0xa0,0x17,0xf1,0x60,0x68,0x12,0xb7,0x7a,0xc3,0xe9,0xfa,0x3d,0x53},
@@ -32,14 +33,12 @@ unsigned char ftable [16][16] =
   {0x5e,0x6c,0xa9,0x13,0x57,0x25,0xb5,0xe3,0xbd,0xa8,0x3a,0x01,0x05,0x59,0x2a,0x46}};
 
 
-char k(int x){
-  int i = x%10;
+uint8_t get_bit(array<uint8_t, 10>&key, int position){
+  int i = position % 10;
   return key[i];
-  return 0;
 }
 
-
-void rotate(){
+void rotate(array<uint8_t, 10>& key){
   //hold onto first bit that will be shifted out
   char rotate_bit = key[9] >> 7;
 
@@ -52,17 +51,31 @@ void rotate(){
   key[0] = key[0] << 1 | rotate_bit;
 }
 
-void generate_keys(int round){
+void generate_single_subkey(array<uint8_t, 10>& key, array<array<uint8_t, 12>, 20>& subkeys, int round){
   //find the 12 subkeys based on the current rotated key, rotate each round (12x)
   for(int i = 0; i < 12; i++){
-    subkeys[round][i] = k(4*round + (i+4)%4);
-    rotate();
+    subkeys[round][i] = get_bit(key, 4*round + (i+4)%4);
+    rotate(key);
   }
 }
 
-unsigned char find_ftable(unsigned char high_g, unsigned char low_g, int round, int key_index){
+
+array<array<uint8_t, 12>, 20> generate_all_subkeys(array<uint8_t, 10>& key){  
+  array<array<uint8_t, 12>, 20> subkeys;
+
+  rotate(key);
+
+  for(int i = 0; i < 20; i++){
+    generate_single_subkey(key, subkeys, i);
+  }
+
+  return subkeys;
+}
+
+
+uint8_t find_ftable(array<array<uint8_t, 12>, 20>& subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
   //generage 8 bytes that correspond to the index
-  unsigned char ftable_index = high_g ^ subkeys[round][key_index];
+  uint8_t ftable_index = high_g ^ subkeys[round][key_index];
 
 
   //split ftable index into two parts: i and j to index into the ftable
@@ -70,55 +83,43 @@ unsigned char find_ftable(unsigned char high_g, unsigned char low_g, int round, 
   unsigned int j = ftable_index  & 0x0f;
 
   //return the i,jth index of the ftable xor low_g
-  unsigned char freturn = ftable[i][j] ^ low_g;
+  uint8_t freturn = ftable[i][j] ^ low_g;
 
   return freturn;
 
 }
 
-unsigned short G(unsigned short r0, int key_offset, int round){
-  unsigned char g1 = short(r0 >> 8);
-  unsigned char g2 = r0 & 0x00ff;
-  unsigned char g3 = find_ftable(g2, g1, round, key_offset + 0);
-  unsigned char g4 = find_ftable(g3, g2, round, key_offset + 1);
-  unsigned char g5 = find_ftable(g4, g3, round, key_offset + 2);
-  unsigned char g6 = find_ftable(g5, g4, round, key_offset + 3);
+unsigned short G(array<array<uint8_t, 12>, 20>& subkeys, unsigned short r0, int key_offset, int round){
+  uint8_t g1 = short(r0 >> 8);
+  uint8_t g2 = r0 & 0x00ff;
+  uint8_t g3 = find_ftable(subkeys, g2, g1, round, key_offset + 0);
+  uint8_t g4 = find_ftable(subkeys, g3, g2, round, key_offset + 1);
+  uint8_t g5 = find_ftable(subkeys, g4, g3, round, key_offset + 2);
+  uint8_t g6 = find_ftable(subkeys, g5, g4, round, key_offset + 3);
 
   //concat g5 and g6 to return
   unsigned short greturn = g5 << 8 | g6;
 
   return greturn;
 
-  //unsigned char g3_index = 
+  //uint8_t g3_index = 
 }
 
-void F(unsigned short r0, unsigned short r1, int round, unsigned short &f0, unsigned short &f1){  
-  unsigned short t0 = G(r0, 0, round);
-  unsigned short t1 = G(r1, 4, round);
+void F(array<array<uint8_t, 12>, 20>& subkeys, unsigned short r0, unsigned short r1, int round, unsigned short &f0, unsigned short &f1){  
+  unsigned short t0 = G(subkeys, r0, 0, round);
+  unsigned short t1 = G(subkeys, r1, 4, round);
 
   f0 = (t0 + (2*t1) + (subkeys[round][8] << 8 | subkeys[round][9])) % 65536;
   f1 = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
 }
 
-int main(int argc, char ** argv) {
-  if(argc < 2){
-    cout << "Must include e/d option." << endl;
-    return -1;
-  }
-
-  char option;
-
-  option = *argv[1];
-
-  //Open output file
-  FILE * output;
-  output = fopen("output.txt", "a");
-
-  //-------------KEY INPUT---------------//
+array<uint8_t, 10> get_key(){
+  array<uint8_t, 10> key;
   FILE * keystream;
   keystream = fopen("key.txt", "rt");
 
-  //Key is read in as 10 bytes (20 ascii characters interpreted as hex digits), with K[0] as the lowest order byte (farthest right two hex digits)
+  // Key is read in as 10 bytes (20 ascii characters interpreted as hex digits), 
+  // with K[0] as the lowest order byte (the farthest right two digits in the file)
   int i = 9;
   unsigned hex;
   int h = fscanf(keystream, "%2x", &hex);
@@ -136,27 +137,39 @@ int main(int argc, char ** argv) {
   //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
   for(int i = 0; i < 10; i++){
     original_k[i] = key[i];
+    cout << key[i] << endl;
   }
 
+  return key;
+}
+
+int main(int argc, char ** argv) {
+  if(argc < 2){
+    cout << "Must include e/d option." << endl;
+    return -1;
+  }
+
+  char option;
+
+  option = *argv[1];
+
+  //Open output file
+  
+  array<uint8_t, 10> key = get_key();
 
   //------------SUBKEY GENERATION---------------//
-  //Rotate the key once before generating sybkeys, generate keys is called 20x, and generates 12 keys per call = 20x12 = 240 subkeys
-  rotate();
+  array<array<uint8_t, 12>, 20> subkeys = generate_all_subkeys(key);
 
-  for(int j = 0; j < 20; j++){
-    generate_keys(j);
-  }
 
 
   if(option == 'e'){
     //-------------PLAINTEX INPUT-----------------//
-    //create a 9 byte input buffer, 9th byte is the null terminator
-    unsigned char buffer[8];
+    uint8_t buffer[8] = {0};
     FILE * stream;
+    
+    FILE * output;
+    output = fopen("output.txt", "a");
 
-    for(int i = 0; i < 9; i++){
-      buffer[i] = 0;
-    }
 
     const char* file;
 
@@ -187,7 +200,7 @@ int main(int argc, char ** argv) {
         unsigned short f0;
         unsigned short f1;
 
-        F(r[0], r[1], i, f0, f1);
+        F(subkeys, r[0], r[1], i, f0, f1);
 
         r[0] = f0 ^ r[2];
         r[1] = f1 ^ r[3];
@@ -207,6 +220,7 @@ int main(int argc, char ** argv) {
 
 
       //---------------WRITE FILE-----------------//
+
       for (int i = 0; i < 4; i++)
       {
         fprintf(output, "%04x", *(c+i));
@@ -230,13 +244,17 @@ int main(int argc, char ** argv) {
   else{
     FILE * cipherstream;
     cipherstream = fopen("cipher.txt", "rt");
-    unsigned char buffer[9];
+    FILE * output;
+    output = fopen("output.txt", "a");
 
+    uint8_t buffer[9] = {0};
+
+    /*
     for(int i = 0; i < 8; i++){
       buffer[i] = 0;
-    }
+    }*/
 
-    unsigned hex;
+    unsigned int hex;
     int x = fscanf(cipherstream, "%2x", &hex);
 
     //added
@@ -244,8 +262,8 @@ int main(int argc, char ** argv) {
       int i = 0;
       buffer[i++] = hex;
 
-      while (h > 0 && i < 8){
-        h = fscanf(cipherstream, "%2x", &hex);
+      while (x > 0 && i < 8){
+        x = fscanf(cipherstream, "%2x", &hex);
         buffer[i] = hex;
         i++;
       }
@@ -269,7 +287,7 @@ int main(int argc, char ** argv) {
         unsigned short f0;
         unsigned short f1;
 
-        F(r[0], r[1], i, f0, f1);
+        F(subkeys, r[0], r[1], i, f0, f1);
 
         r[0] = f0 ^ r[2];
         r[1] = f1 ^ r[3];
@@ -300,12 +318,11 @@ int main(int argc, char ** argv) {
       }
 
       x = fscanf(cipherstream, "%2x", &hex);
-      int gd;  
-
     }
 
 
     fclose(cipherstream);
     return(0);
+   
   }
 }
