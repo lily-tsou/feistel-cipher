@@ -146,30 +146,32 @@ array<uint8_t, 10> get_key(){
 }
 
 void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
-  //-------------PLAINTEX INPUT-----------------//
+  FILE * plaintext_in;
+  plaintext_in = fopen("text.txt", "r");
+  
+  FILE * decryption_out;
+  decryption_out = fopen("output.txt", "a");
+  
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
 
-  FILE * plaintext_in;
-  decryption_out = fopen("output.txt", "a");
+  array<uint16_t, 4>  w_temp;
+  w_temp.fill(0);
   
-  FILE * decryption_out;
-  plaintext_in = fopen("text.txt", "r");
-
   //Read in 8 bytes from file
   int x = fread(&buffer, 1, 8, plaintext_in);
   while(x > 1){
 
     //W0 = buffer[0] and buffer[1], W1 = buffer[2] and buffer[3], etc.
     for(int i = 0; i < 4; i++){
-      w[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+      w_temp[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
     }
 
     //XOR W with key to create R0....R3
     int key_i = 9;
     for(int i = 0; i < 4; i++){
       unsigned short concat_k = original_k[key_i--] << 8 | (original_k[key_i--]);
-      r[i] = concat_k ^ w[i];
+      r[i] = concat_k ^ w_temp[i];
     }
 
     //-------------BLOCK ENCRYPTION--------------//
