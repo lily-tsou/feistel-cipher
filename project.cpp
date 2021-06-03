@@ -151,7 +151,7 @@ array<uint8_t, 10> get_key(){
 }
 
 //TODO can use for decryption?
-array<uint16_t, 4> get_blocks_xored_with_key(array<uint16_t, 4>  input_blocks) {
+array<uint16_t, 4> get_whitened_blocks(array<uint16_t, 4>  input_blocks) {
   array<uint16_t, 4> output_blocks;
   int index = 9;
   for(int i = 0; i < 4; i++){
@@ -173,12 +173,20 @@ void write_file(array<uint16_t, 4> cipher){
   fclose(file_out);
 }
 
-void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
+void process_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
+      uint16_t temp_r2 = round_blocks[0];
+      uint16_t temp_r3 = round_blocks[1];
+      array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
+      round_blocks[0] = f[0] ^ round_blocks[2];
+      round_blocks[1] = f[1] ^ round_blocks[3];
+      round_blocks[2] = temp_r2;
+      round_blocks[3] = temp_r3;
+}
+
+void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
-
-  // A buffer is required for bytes to be read in
-  // correct order on a Little Endian machine
+  // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   array<uint16_t, 4>  plaintext_input;
@@ -186,32 +194,21 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
 
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
-    for(int i = 0; i < 4; i++){
+    for(int i = 0; i < 4; i++)
       plaintext_input[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-    }
-    array<uint16_t, 4> round_blocks = get_blocks_xored_with_key(plaintext_input);
+    array<uint16_t, 4> round_blocks = get_whitened_blocks(plaintext_input);
 
-    //-------------BLOCK ENCRYPTION--------------//
-    for(int i = 0; i < 20; i++){
-      unsigned short temp_r2 = round_blocks[0];
-      unsigned short temp_r3 = round_blocks[1];
-      array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], i);
-      round_blocks[0] = f[0] ^ round_blocks[2];
-      round_blocks[1] = f[1] ^ round_blocks[3];
-      round_blocks[2] = temp_r2;
-      round_blocks[3] = temp_r3;
-    }
+    for(int i = 0; i < 20; i++)
+      process_round(round_blocks, subkeys, i);
 
     array<uint16_t, 4> temp_blocks;
-    for(int i = 0; i < 4; i++){
+    for(int i = 0; i < 4; i++)
       temp_blocks[i] = round_blocks[(i+2)%4];
-    }
 
-    array<uint16_t, 4> cipher = get_blocks_xored_with_key(temp_blocks);
-
+    array<uint16_t, 4> cipher = get_whitened_blocks(temp_blocks);
     write_file(cipher);
 
-    // Add padding if the next read is less than 8 bytes
+    // Adds padding if the next read is less than 8 bytes
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
   }
