@@ -138,6 +138,7 @@ array<uint8_t, 10> get_key(){
     key[i] = hex_digits;
     i--;
   }
+
   fclose(key_in);
 
   //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
@@ -160,11 +161,21 @@ array<uint16_t, 4> get_blocks_xored_with_key(array<uint16_t, 4>  input_blocks) {
   return output_blocks;
 }
 
+//TODO can use for decrypt?
+void write_file(array<uint16_t, 4> cipher){
+  FILE * file_out;
+  file_out = fopen("output.txt", "a");
+
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%04x", cipher[i]);
+  fprintf(file_out, "\n");
+
+  fclose(file_out);
+}
+
 void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
-  FILE * file_out;
-  file_out = fopen("output.txt", "a");
 
   // A buffer is required for bytes to be read in
   // correct order on a Little Endian machine
@@ -198,12 +209,7 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
 
     array<uint16_t, 4> cipher = get_blocks_xored_with_key(temp_blocks);
 
-    //---------------WRITE FILE-----------------//
-    for (int i = 0; i < 4; i++)
-    {
-      fprintf(file_out, "%04x", cipher[i]);
-    }
-    fprintf(file_out, "\n");
+    write_file(cipher);
 
     // Add padding if the next read is less than 8 bytes
     buffer.fill(0);
@@ -211,7 +217,6 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
   }
 
   fclose(file_in);
-  fclose(file_out);
 }
 
 int main(int argc, char ** argv) {
