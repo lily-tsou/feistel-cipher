@@ -125,25 +125,20 @@ array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20>& subkeys, unsigned short 
 //TODO change name (e.g. get_key_as_hex())
 //TODO Pass in file name? Open/close inside or outside of file?
 array<uint8_t, 10> get_key(){
+  FILE * key_in;
+  key_in = fopen("key.txt", "rt");
   array<uint8_t, 10> key;
-  FILE * keystream;
-  keystream = fopen("key.txt", "rt");
+  unsigned int hex_digits;
 
-  // Key is read in as 10 bytes (20 ascii characters interpreted as hex digits), 
-  // with K[0] as the lowest order byte (the farthest right two digits in the file)
+  int items_read = fscanf(key_in, "%2x", &hex_digits);
   int i = 9;
-  unsigned hex;
-  int h = fscanf(keystream, "%2x", &hex);
-  key[i--] = hex;
-
-  while (h != EOF && i >= 0){
-    h = fscanf(keystream, "%2x", &hex);
-    key[i] = hex;
+  key[i--] = hex_digits;
+  while (items_read != EOF && i >= 0){
+    items_read = fscanf(key_in, "%2x", &hex_digits);
+    key[i] = hex_digits;
     i--;
   }
-
-  fclose(keystream);
-
+  fclose(key_in);
 
   //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
   for(int i = 0; i < 10; i++){
