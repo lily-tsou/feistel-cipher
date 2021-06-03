@@ -113,6 +113,15 @@ void F(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned s
   f1 = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
 }
 
+array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned short block1, int round){ 
+  array<uint16_t, 2> f;
+  unsigned short t0 = G(subkeys, block0, 0, round);
+  unsigned short t1 = G(subkeys, block1, 4, round);
+  f[0] = (t0 + (2*t1) + (subkeys[round][8] << 8 | subkeys[round][9])) % 65536;
+  f[1] = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
+  return f;
+}
+
 //TODO change name (e.g. get_key_as_hex())
 //TODO Pass in file name? Open/close inside or outside of file?
 array<uint8_t, 10> get_key(){
@@ -180,11 +189,9 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
     for(int i = 0; i < 20; i++){
       unsigned short temp_r2 = round_blocks[0];
       unsigned short temp_r3 = round_blocks[1];
-      unsigned short f0;
-      unsigned short f1;
-      F(subkeys, round_blocks[0], round_blocks[1], i, f0, f1);
-      round_blocks[0] = f0 ^ round_blocks[2];
-      round_blocks[1] = f1 ^ round_blocks[3];
+      array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], i);
+      round_blocks[0] = f[0] ^ round_blocks[2];
+      round_blocks[1] = f[1] ^ round_blocks[3];
       round_blocks[2] = temp_r2;
       round_blocks[3] = temp_r3;
     }
