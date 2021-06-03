@@ -174,13 +174,13 @@ void write_file(array<uint16_t, 4> cipher){
 }
 
 void process_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
-      uint16_t temp_r2 = round_blocks[0];
-      uint16_t temp_r3 = round_blocks[1];
-      array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
-      round_blocks[0] = f[0] ^ round_blocks[2];
-      round_blocks[1] = f[1] ^ round_blocks[3];
-      round_blocks[2] = temp_r2;
-      round_blocks[3] = temp_r3;
+  uint16_t temp_r2 = round_blocks[0];
+  uint16_t temp_r3 = round_blocks[1];
+  array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
+  round_blocks[0] = f[0] ^ round_blocks[2];
+  round_blocks[1] = f[1] ^ round_blocks[3];
+  round_blocks[2] = temp_r2;
+  round_blocks[3] = temp_r3;
 }
 
 void encrypt(array<array<uint8_t, 12>, 20> subkeys){
@@ -216,7 +216,86 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   fclose(file_in);
 }
 
+void decrypt(array<array<uint8_t, 12>, 20> subkeys){
+  FILE * cipherstream;
+  cipherstream = fopen("cipher.txt", "rt");
+  FILE * output;
+  output = fopen("output.txt", "a");
+
+  uint8_t buffer[8] = {0};
+
+
+  unsigned int hex;
+  int x = fscanf(cipherstream, "%2x", &hex);
+
+  //added
+  while(x > 0){
+    int i = 0;
+    buffer[i++] = hex;
+
+    while (x > 0 && i < 8){
+      x = fscanf(cipherstream, "%2x", &hex);
+      buffer[i] = hex;
+      i++;
+    }
+
+    //W0 = buffer[0] and buffer[1], W1 = buffer[2] and buffer[3], etc.
+    for(int i = 0; i < 4; i++){
+      w[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+    }
+
+    //XOR W with key to create R0....R3
+    int key_i = 9;
+    for(int i = 0; i < 4; i++){
+      unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
+      r[i] = concat_k ^ w[i];
+    }
+
+    //-------------BLOCK ENCRYPTION--------------//
+    for(int i = 19; i > -1; i--){
+      unsigned short temp_r2 = r[0];
+      unsigned short temp_r3 = r[1];
+      unsigned short f0;
+      unsigned short f1;
+
+      F(subkeys, r[0], r[1], i, f0, f1);
+
+      r[0] = f0 ^ r[2];
+      r[1] = f1 ^ r[3];
+      r[2] = temp_r2;
+      r[3] = temp_r3;
+    }
+
+    for(int i = 0; i < 4; i++){
+      y[i] = r[(i+2)%4];
+    }
+
+    key_i = 9;
+    for(int i = 0; i < 4; i++){
+      unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
+      c[i] = concat_k ^ y[i];
+    }
+
+
+    //---------------WRITE FILE-----------------//
+    for (int i = 0; i < 4; i++)
+    {
+      fprintf(output, "%c%c", (*(c+i)) >> 8, (*(c+i)));
+    }
+
+    //empty buffer, will add padding if the next read is less than 8
+    for(int i = 0; i < 9; i++){
+      buffer[i] = 0; 
+    }
+
+    x = fscanf(cipherstream, "%2x", &hex);
+  }
+
+  fclose(cipherstream);
+}
+
 int main(int argc, char ** argv) {
+  //TODO make this mroe user friendly
   if(argc < 2){
     cout << "Must include e/d option." << endl;
     return -1;
@@ -230,10 +309,7 @@ int main(int argc, char ** argv) {
 
   array<uint8_t, 10> key = get_key();
 
-  //------------SUBKEY GENERATION---------------//
   array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
-
-
 
   if(option == 'e'){
     encrypt(subkeys);
@@ -241,87 +317,8 @@ int main(int argc, char ** argv) {
   }
 
   else{
-    FILE * cipherstream;
-    cipherstream = fopen("cipher.txt", "rt");
-    FILE * output;
-    output = fopen("output.txt", "a");
-
-    uint8_t buffer[8] = {0};
-
-    /*
-       for(int i = 0; i < 8; i++){
-       buffer[i] = 0;
-       }*/
-
-    unsigned int hex;
-    int x = fscanf(cipherstream, "%2x", &hex);
-
-    //added
-    while(x > 0){
-      int i = 0;
-      buffer[i++] = hex;
-
-      while (x > 0 && i < 8){
-        x = fscanf(cipherstream, "%2x", &hex);
-        buffer[i] = hex;
-        i++;
-      }
-
-      //W0 = buffer[0] and buffer[1], W1 = buffer[2] and buffer[3], etc.
-      for(int i = 0; i < 4; i++){
-        w[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-      }
-
-      //XOR W with key to create R0....R3
-      int key_i = 9;
-      for(int i = 0; i < 4; i++){
-        unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-        r[i] = concat_k ^ w[i];
-      }
-
-      //-------------BLOCK ENCRYPTION--------------//
-      for(int i = 19; i > -1; i--){
-        unsigned short temp_r2 = r[0];
-        unsigned short temp_r3 = r[1];
-        unsigned short f0;
-        unsigned short f1;
-
-        F(subkeys, r[0], r[1], i, f0, f1);
-
-        r[0] = f0 ^ r[2];
-        r[1] = f1 ^ r[3];
-        r[2] = temp_r2;
-        r[3] = temp_r3;
-      }
-
-      for(int i = 0; i < 4; i++){
-        y[i] = r[(i+2)%4];
-      }
-
-      key_i = 9;
-      for(int i = 0; i < 4; i++){
-        unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-        c[i] = concat_k ^ y[i];
-      }
-
-
-      //---------------WRITE FILE-----------------//
-      for (int i = 0; i < 4; i++)
-      {
-        fprintf(output, "%c%c", (*(c+i)) >> 8, (*(c+i)));
-      }
-
-      //empty buffer, will add padding if the next read is less than 8
-      for(int i = 0; i < 9; i++){
-        buffer[i] = 0; 
-      }
-
-      x = fscanf(cipherstream, "%2x", &hex);
-    }
-
-
-    fclose(cipherstream);
-    return(0);
+    decrypt(subkeys);
 
   }
+  return(0);
 }
