@@ -113,28 +113,33 @@ void F(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned s
   f1 = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
 }
 
+array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned short block1, int round){ 
+  array<uint16_t, 2> f;
+  unsigned short t0 = G(subkeys, block0, 0, round);
+  unsigned short t1 = G(subkeys, block1, 4, round);
+  f[0] = (t0 + (2*t1) + (subkeys[round][8] << 8 | subkeys[round][9])) % 65536;
+  f[1] = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
+  return f;
+}
+
 //TODO change name (e.g. get_key_as_hex())
 //TODO Pass in file name? Open/close inside or outside of file?
 array<uint8_t, 10> get_key(){
+  FILE * key_in;
+  key_in = fopen("key.txt", "rt");
   array<uint8_t, 10> key;
-  FILE * keystream;
-  keystream = fopen("key.txt", "rt");
+  unsigned int hex_digits;
 
-  // Key is read in as 10 bytes (20 ascii characters interpreted as hex digits), 
-  // with K[0] as the lowest order byte (the farthest right two digits in the file)
+  int items_read = fscanf(key_in, "%2x", &hex_digits);
   int i = 9;
-  unsigned hex;
-  int h = fscanf(keystream, "%2x", &hex);
-  key[i--] = hex;
-
-  while (h != EOF && i >= 0){
-    h = fscanf(keystream, "%2x", &hex);
-    key[i] = hex;
+  key[i--] = hex_digits;
+  while (items_read != EOF && i >= 0){
+    items_read = fscanf(key_in, "%2x", &hex_digits);
+    key[i] = hex_digits;
     i--;
   }
 
-  fclose(keystream);
-
+  fclose(key_in);
 
   //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
   for(int i = 0; i < 10; i++){
@@ -156,11 +161,21 @@ array<uint16_t, 4> get_blocks_xored_with_key(array<uint16_t, 4>  input_blocks) {
   return output_blocks;
 }
 
+//TODO can use for decrypt?
+void write_file(array<uint16_t, 4> cipher){
+  FILE * file_out;
+  file_out = fopen("output.txt", "a");
+
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%04x", cipher[i]);
+  fprintf(file_out, "\n");
+
+  fclose(file_out);
+}
+
 void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
-  FILE * file_out;
-  file_out = fopen("output.txt", "a");
 
   // A buffer is required for bytes to be read in
   // correct order on a Little Endian machine
@@ -180,11 +195,9 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
     for(int i = 0; i < 20; i++){
       unsigned short temp_r2 = round_blocks[0];
       unsigned short temp_r3 = round_blocks[1];
-      unsigned short f0;
-      unsigned short f1;
-      F(subkeys, round_blocks[0], round_blocks[1], i, f0, f1);
-      round_blocks[0] = f0 ^ round_blocks[2];
-      round_blocks[1] = f1 ^ round_blocks[3];
+      array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], i);
+      round_blocks[0] = f[0] ^ round_blocks[2];
+      round_blocks[1] = f[1] ^ round_blocks[3];
       round_blocks[2] = temp_r2;
       round_blocks[3] = temp_r3;
     }
@@ -196,12 +209,7 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
 
     array<uint16_t, 4> cipher = get_blocks_xored_with_key(temp_blocks);
 
-    //---------------WRITE FILE-----------------//
-    for (int i = 0; i < 4; i++)
-    {
-      fprintf(file_out, "%04x", cipher[i]);
-    }
-    fprintf(file_out, "\n");
+    write_file(cipher);
 
     // Add padding if the next read is less than 8 bytes
     buffer.fill(0);
@@ -209,7 +217,6 @@ void encrypt(array<array<uint8_t, 12>, 20>& subkeys){
   }
 
   fclose(file_in);
-  fclose(file_out);
 }
 
 int main(int argc, char ** argv) {
