@@ -161,14 +161,25 @@ array<uint16_t, 4> get_whitened_blocks(array<uint16_t, 4>  input_blocks) {
   return output_blocks;
 }
 
-//TODO can use for decrypt?
-void write_file(array<uint16_t, 4> cipher){
+// TODO input file name as parameter?
+void write_file_as_hex(array<uint16_t, 4> buffer){
   FILE * file_out;
   file_out = fopen("output.txt", "a");
 
   for (int i = 0; i < 4; i++)
-    fprintf(file_out, "%04x", cipher[i]);
+    fprintf(file_out, "%04x", buffer[i]);
   fprintf(file_out, "\n");
+
+  fclose(file_out);
+}
+
+// TODO input file name as parameter?
+void write_file_as_ascii(array<uint16_t, 4> buffer){
+  FILE * file_out;
+  file_out = fopen("output.txt", "a");
+
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
 
   fclose(file_out);
 }
@@ -206,7 +217,7 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
       temp_blocks[i] = round_blocks[(i+2)%4];
 
     array<uint16_t, 4> cipher = get_whitened_blocks(temp_blocks);
-    write_file(cipher);
+    write_file_as_hex(cipher);
 
     // Adds padding if the next read is less than 8 bytes
     buffer.fill(0);
@@ -217,16 +228,16 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
 }
 
 void decrypt(array<array<uint8_t, 12>, 20> subkeys){
-  FILE * cipherstream;
-  cipherstream = fopen("cipher.txt", "rt");
-  FILE * output;
-  output = fopen("output.txt", "a");
+  FILE * cipher_in;
+  cipher_in = fopen("cipher.txt", "rt");
+  //FILE * output;
+  //output = fopen("output.txt", "a");
 
   uint8_t buffer[8] = {0};
 
 
   unsigned int hex;
-  int x = fscanf(cipherstream, "%2x", &hex);
+  int x = fscanf(cipher_in, "%2x", &hex);
 
   //added
   while(x > 0){
@@ -234,7 +245,7 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
     buffer[i++] = hex;
 
     while (x > 0 && i < 8){
-      x = fscanf(cipherstream, "%2x", &hex);
+      x = fscanf(cipher_in, "%2x", &hex);
       buffer[i] = hex;
       i++;
     }
@@ -270,28 +281,23 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
       y[i] = r[(i+2)%4];
     }
 
+    array<uint16_t, 4> plaintext;
     key_i = 9;
     for(int i = 0; i < 4; i++){
       unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-      c[i] = concat_k ^ y[i];
+      plaintext[i] = concat_k ^ y[i];
     }
 
-
-    //---------------WRITE FILE-----------------//
-    for (int i = 0; i < 4; i++)
-    {
-      fprintf(output, "%c%c", (*(c+i)) >> 8, (*(c+i)));
-    }
-
-    //empty buffer, will add padding if the next read is less than 8
+    write_file_as_ascii(plaintext);
+    
     for(int i = 0; i < 9; i++){
       buffer[i] = 0; 
     }
 
-    x = fscanf(cipherstream, "%2x", &hex);
+    x = fscanf(cipher_in, "%2x", &hex);
   }
 
-  fclose(cipherstream);
+  fclose(cipher_in);
 }
 
 int main(int argc, char ** argv) {
