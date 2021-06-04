@@ -194,6 +194,17 @@ void process_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 2
   round_blocks[3] = temp_r3;
 }
 
+//TODO rename?
+array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
+    array<uint16_t, 4> hex_chars;
+    for(int i = 0; i < 4; i++){
+      hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+    }
+
+    return hex_chars;
+}
+
+
 void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
@@ -228,38 +239,32 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
 }
 
 void decrypt(array<array<uint8_t, 12>, 20> subkeys){
-  FILE * cipher_in;
-  cipher_in = fopen("cipher.txt", "rt");
-  //FILE * output;
-  //output = fopen("output.txt", "a");
-
-  uint8_t buffer[8] = {0};
-
-
-  unsigned int hex;
-  int x = fscanf(cipher_in, "%2x", &hex);
-
-  //added
-  while(x > 0){
+  FILE * file_in;
+  file_in = fopen("cipher.txt", "rt");
+  // A buffer is required for bytes to be read in order on a Little Endian machine
+  array<uint8_t, 8>  buffer;
+  buffer.fill(0);
+  unsigned int hex_digits;
+  
+  int items_read = fscanf(file_in, "%2x", &hex_digits);
+  while(items_read > 0){
     int i = 0;
-    buffer[i++] = hex;
+    buffer[i++] = hex_digits;
 
-    while (x > 0 && i < 8){
-      x = fscanf(cipher_in, "%2x", &hex);
-      buffer[i] = hex;
+    //TODO can't move this out of function because reading file_in is driving decrypt?
+    while (items_read > 0 && i < 8){
+      items_read = fscanf(file_in, "%2x", &hex_digits);
+      buffer[i] = hex_digits;
       i++;
     }
 
-    //W0 = buffer[0] and buffer[1], W1 = buffer[2] and buffer[3], etc.
-    for(int i = 0; i < 4; i++){
-      w[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-    }
+    array<uint16_t, 4> cipher_input = concat_chars_as_hex(buffer);
 
     //XOR W with key to create R0....R3
     int key_i = 9;
     for(int i = 0; i < 4; i++){
       unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-      r[i] = concat_k ^ w[i];
+      r[i] = concat_k ^ cipher_input[i];
     }
 
     //-------------BLOCK ENCRYPTION--------------//
@@ -294,10 +299,10 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
       buffer[i] = 0; 
     }
 
-    x = fscanf(cipher_in, "%2x", &hex);
+    items_read = fscanf(file_in, "%2x", &hex_digits);
   }
 
-  fclose(cipher_in);
+  fclose(file_in);
 }
 
 int main(int argc, char ** argv) {
