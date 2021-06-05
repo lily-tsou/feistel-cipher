@@ -211,13 +211,11 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
-  array<uint16_t, 4>  plaintext_input;
-  plaintext_input.fill(0);
 
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
-    for(int i = 0; i < 4; i++)
-      plaintext_input[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+    array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
+
     array<uint16_t, 4> round_blocks = get_whitened_blocks(plaintext_input);
 
     for(int i = 0; i < 20; i++)
