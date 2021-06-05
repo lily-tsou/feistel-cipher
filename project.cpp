@@ -7,7 +7,6 @@
 #include<bitset>
 #include<array>
 
-
 using namespace std;
 uint8_t unrotated_key[10] = {0};
 unsigned short w[4] = {0};
@@ -142,10 +141,8 @@ array<uint8_t, 10> get_key(){
   fclose(key_in);
 
   //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
-  for(int i = 0; i < 10; i++){
+  for(int i = 0; i < 10; i++)
     unrotated_key[i] = key[i];
-    cout << key[i] << endl;
-  }
 
   return key;
 }
@@ -208,11 +205,11 @@ void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> 
   array<uint16_t, 4> input = concat_chars_as_hex(buffer);
   array<uint16_t, 4> round_blocks = get_whitened_blocks(input);
 
-  if(option == 'd')
-    for(int i = 19; i > -1; i--)
-      process_single_round(round_blocks, subkeys, i);
-  else if(option == 'e')
+  if(option == 'e')
     for(int i = 0; i < 20; i++)
+      process_single_round(round_blocks, subkeys, i);
+  else if(option == 'd')
+    for(int i = 19; i > -1; i--)
       process_single_round(round_blocks, subkeys, i);
 
   array<uint16_t, 4> temp_blocks;
@@ -222,10 +219,10 @@ void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> 
 
   array<uint16_t, 4> processed_blocks = get_whitened_blocks(temp_blocks);
   
-  if(option == 'd')
-    write_file_as_ascii(processed_blocks);
-  else if(option == 'e')
+  if(option == 'e')
     write_file_as_hex(processed_blocks);
+  else if(option == 'd')
+    write_file_as_ascii(processed_blocks);
 
   buffer.fill(0);
 }
@@ -285,25 +282,16 @@ int main(int argc, char ** argv) {
     cout << "Must include e/d option." << endl;
     return -1;
   }
-
-  char option;
-
-  option = *argv[1];
-
-  //Open output file
+  char option = *argv[1];
 
   array<uint8_t, 10> key = get_key();
-
   array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
 
-  if(option == 'e'){
+  if(option == 'e')
     encrypt(subkeys);
-    return(0);
-  }
 
-  else{
+  else
     decrypt(subkeys);
 
-  }
-  return(0);
+  return 0;
 }
