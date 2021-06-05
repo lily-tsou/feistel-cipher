@@ -184,7 +184,7 @@ void write_file_as_ascii(array<uint16_t, 4> buffer){
   fclose(file_out);
 }
 
-void process_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
+void process_single_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
   uint16_t temp_r2 = round_blocks[0];
   uint16_t temp_r3 = round_blocks[1];
   array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
@@ -204,6 +204,24 @@ array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
     return hex_chars;
 }
 
+void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> subkeys){
+    array<uint16_t, 4> input = concat_chars_as_hex(buffer);
+    array<uint16_t, 4> round_blocks = get_whitened_blocks(input);
+
+    for(int i = 19; i > -1; i--){
+      process_single_round(round_blocks, subkeys, i);
+    }
+
+    array<uint16_t, 4> temp_blocks;
+    for(int i = 0; i < 4; i++){
+      temp_blocks[i] = round_blocks[(i+2)%4];
+    }
+
+    array<uint16_t, 4> plaintext = get_whitened_blocks(temp_blocks);
+    write_file_as_ascii(plaintext);
+    
+    buffer.fill(0);
+}
 
 void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   FILE * file_in;
@@ -215,11 +233,10 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
     array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
-
     array<uint16_t, 4> round_blocks = get_whitened_blocks(plaintext_input);
 
     for(int i = 0; i < 20; i++)
-      process_round(round_blocks, subkeys, i);
+      process_single_round(round_blocks, subkeys, i);
 
     array<uint16_t, 4> temp_blocks;
     for(int i = 0; i < 4; i++)
@@ -228,7 +245,6 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
     array<uint16_t, 4> cipher = get_whitened_blocks(temp_blocks);
     write_file_as_hex(cipher);
 
-    // Adds padding if the next read is less than 8 bytes
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
   }
@@ -248,38 +264,15 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
   while(items_read > 0){
     int i = 0;
     buffer[i++] = hex_digits;
-
-    //TODO can't move this out of function because reading file_in is driving decrypt?
     while (items_read > 0 && i < 8){
       items_read = fscanf(file_in, "%2x", &hex_digits);
       buffer[i] = hex_digits;
       i++;
     }
 
-    array<uint16_t, 4> cipher_input = concat_chars_as_hex(buffer);
-    array<uint16_t, 4> round_blocks = get_whitened_blocks(cipher_input);
-
-    //-------------BLOCK ENCRYPTION--------------//
-    for(int i = 19; i > -1; i--){
-      process_round(round_blocks, subkeys, i);
-    }
-
-    for(int i = 0; i < 4; i++){
-      y[i] = round_blocks[(i+2)%4];
-    }
-
-    array<uint16_t, 4> plaintext;
-    int key_i = 9;
-    for(int i = 0; i < 4; i++){
-      unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-      plaintext[i] = concat_k ^ y[i];
-    }
-
-    write_file_as_ascii(plaintext);
+    process_all_rounds(buffer, subkeys);
     
-    for(int i = 0; i < 9; i++){
-      buffer[i] = 0; 
-    }
+    buffer.fill(0);
 
     items_read = fscanf(file_in, "%2x", &hex_digits);
   }
