@@ -8,13 +8,8 @@
 #include<array>
 
 using namespace std;
-uint8_t unrotated_key[10] = {0};
-unsigned short w[4] = {0};
-unsigned short r[4] = {0};
-unsigned short c[4] = {0};
-unsigned short y[4] = {0};
-uint8_t ftable [16][16] = 
-{{0xa3,0xd7,0x09,0x83,0xf8,0x48,0xf6,0xf4,0xb3, 0x21,0x15,0x78,0x99,0xb1,0xaf,0xf9},
+const array<array<uint8_t, 16>, 16> FTABLE = 
+{{{0xa3,0xd7,0x09,0x83,0xf8,0x48,0xf6,0xf4,0xb3, 0x21,0x15,0x78,0x99,0xb1,0xaf,0xf9},
   {0xe7,0x2d,0x4d,0x8a,0xce,0x4c,0xca,0x2e,0x52,0x95,0xd9,0x1e,0x4e,0x38,0x44,0x28},
   {0x0a,0xdf,0x02,0xa0,0x17,0xf1,0x60,0x68,0x12,0xb7,0x7a,0xc3,0xe9,0xfa,0x3d,0x53},
   {0x96,0x84,0x6b,0xba,0xf2,0x63,0x9a,0x19,0x7c,0xae,0xe5,0xf5,0xf7,0x16,0x6a,0xa2},
@@ -29,10 +24,10 @@ uint8_t ftable [16][16] =
   {0xad,0x04,0x23,0x9c,0x14,0x51,0x22,0xf0,0x29,0x79,0x71,0x7e,0xff,0x8c,0x0e,0xe2},
   {0x0c,0xef,0xbc,0x72,0x75,0x6f,0x37,0xa1,0xec,0xd3,0x8e,0x62,0x8b,0x86,0x10,0xe8},
   {0x08,0x77,0x11,0xbe,0x92,0x4f,0x24,0xc5,0x32,0x36,0x9d,0xcf,0xf3,0xa6,0xbb,0xac},
-  {0x5e,0x6c,0xa9,0x13,0x57,0x25,0xb5,0xe3,0xbd,0xa8,0x3a,0x01,0x05,0x59,0x2a,0x46}};
+  {0x5e,0x6c,0xa9,0x13,0x57,0x25,0xb5,0xe3,0xbd,0xa8,0x3a,0x01,0x05,0x59,0x2a,0x46}}};
 
 
-uint8_t get_byte(array<uint8_t, 10>&key, int position){
+uint8_t get_byte(array<uint8_t, 10> key, int position){
   int i = position % 10;
   return key[i];
 }
@@ -61,7 +56,6 @@ void gen_single_round_keys(array<uint8_t, 10>& key, array<array<uint8_t, 12>, 20
 
 array<array<uint8_t, 12>, 20> gen_all_round_keys(array<uint8_t, 10>& key){  
   array<array<uint8_t, 12>, 20> subkeys;
-
   rotate(key);
 
   for(int i = 0; i < 20; i++){
@@ -72,23 +66,19 @@ array<array<uint8_t, 12>, 20> gen_all_round_keys(array<uint8_t, 10>& key){
 }
 
 
-uint8_t find_ftable(array<array<uint8_t, 12>, 20>& subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
+uint8_t find_ftable(array<array<uint8_t, 12>, 20> subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
   //generage 8 bytes that correspond to the index
-  uint8_t ftable_index = high_g ^ subkeys[round][key_index];
+  uint8_t index = high_g ^ subkeys[round][key_index];
 
+  //split FTABLE index into two parts: i and j to index into the ftable
+  unsigned int i = index >> 4;
+  unsigned int j = index  & 0x0f;
 
-  //split ftable index into two parts: i and j to index into the ftable
-  unsigned int i = ftable_index >> 4;
-  unsigned int j = ftable_index  & 0x0f;
-
-  //return the i,jth index of the ftable xor low_g
-  uint8_t freturn = ftable[i][j] ^ low_g;
-
-  return freturn;
-
+  //return the i,jth index of the FTABLE xor low_g
+  return FTABLE[i][j] ^ low_g;
 }
 
-unsigned short G(array<array<uint8_t, 12>, 20>& subkeys, unsigned short r0, int key_offset, int round){
+unsigned short G(array<array<uint8_t, 12>, 20> subkeys, unsigned short r0, int key_offset, int round){
   uint8_t g1 = short(r0 >> 8);
   uint8_t g2 = r0 & 0x00ff;
   uint8_t g3 = find_ftable(subkeys, g2, g1, round, key_offset + 0);
@@ -97,14 +87,10 @@ unsigned short G(array<array<uint8_t, 12>, 20>& subkeys, unsigned short r0, int 
   uint8_t g6 = find_ftable(subkeys, g5, g4, round, key_offset + 3);
 
   //concat g5 and g6 to return
-  unsigned short greturn = g5 << 8 | g6;
-
-  return greturn;
-
-  //uint8_t g3_index = 
+  return g5 << 8 | g6;
 }
 
-void F(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned short block1, int round, unsigned short &f0, unsigned short &f1){  
+void F(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, unsigned short block1, int round, unsigned short &f0, unsigned short &f1){  
   unsigned short t0 = G(subkeys, block0, 0, round);
   unsigned short t1 = G(subkeys, block1, 4, round);
 
@@ -112,7 +98,7 @@ void F(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned s
   f1 = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
 }
 
-array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20>& subkeys, unsigned short block0, unsigned short block1, int round){ 
+array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, unsigned short block1, int round){ 
   array<uint16_t, 2> f;
   unsigned short t0 = G(subkeys, block0, 0, round);
   unsigned short t1 = G(subkeys, block1, 4, round);
@@ -139,20 +125,15 @@ array<uint8_t, 10> get_key(){
   }
 
   fclose(key_in);
-
-  //Get rid if this if time -- original key should not be necessary, key is rotated back to beginning
-  for(int i = 0; i < 10; i++)
-    unrotated_key[i] = key[i];
-
   return key;
 }
 
 //TODO can use for decryption?
-array<uint16_t, 4> get_whitened_blocks(array<uint16_t, 4>  input_blocks) {
+array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4>  input_blocks) {
   array<uint16_t, 4> output_blocks;
   int index = 9;
   for(int i = 0; i < 4; i++){
-    uint16_t key_bytes = unrotated_key[index--] << 8 | (unrotated_key[index--]);
+    uint16_t key_bytes = key[index--] << 8 | key[index--];
     output_blocks[i] = key_bytes ^ input_blocks[i];
   }
   return output_blocks;
@@ -181,7 +162,7 @@ void write_file_as_ascii(array<uint16_t, 4> buffer){
   fclose(file_out);
 }
 
-void process_single_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
+void process_single_round(array<uint16_t, 4> round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
   uint16_t temp_r2 = round_blocks[0];
   uint16_t temp_r3 = round_blocks[1];
   array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
@@ -201,9 +182,9 @@ array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
   return hex_chars;
 }
 
-void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> subkeys, char option){
+void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> subkeys, array<uint8_t, 8> buffer, char option){
   array<uint16_t, 4> input = concat_chars_as_hex(buffer);
-  array<uint16_t, 4> round_blocks = get_whitened_blocks(input);
+  array<uint16_t, 4> round_blocks = get_whitened_blocks(key, input);
 
   if(option == 'e')
     for(int i = 0; i < 20; i++)
@@ -217,7 +198,7 @@ void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> 
     temp_blocks[i] = round_blocks[(i+2)%4];
   }
 
-  array<uint16_t, 4> processed_blocks = get_whitened_blocks(temp_blocks);
+  array<uint16_t, 4> processed_blocks = get_whitened_blocks(key, temp_blocks);
   
   if(option == 'e')
     write_file_as_hex(processed_blocks);
@@ -227,20 +208,21 @@ void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> 
   buffer.fill(0);
 }
 
-void encrypt(array<array<uint8_t, 12>, 20> subkeys){
+void encrypt(){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
   // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
+  array<uint8_t, 10> start_key = get_key();
+  array<uint8_t, 10> key = start_key;
+  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
 
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
     array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
-    array<uint16_t, 4> round_blocks = get_whitened_blocks(plaintext_input);
-
-    process_all_rounds(buffer, subkeys, 'e');
-
+    array<uint16_t, 4> round_blocks = get_whitened_blocks(key, plaintext_input);
+    process_all_rounds(key, subkeys, buffer, 'e');
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
   }
@@ -248,13 +230,17 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
   fclose(file_in);
 }
 
-void decrypt(array<array<uint8_t, 12>, 20> subkeys){
+void decrypt(){
   FILE * file_in;
   file_in = fopen("cipher.txt", "rt");
   // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   unsigned int hex_digits;
+  array<uint8_t, 10> start_key = get_key();
+  array<uint8_t, 10> key = start_key;
+  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
+
 
   int items_read = fscanf(file_in, "%2x", &hex_digits);
   while(items_read > 0){
@@ -266,10 +252,8 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
       i++;
     }
 
-    process_all_rounds(buffer, subkeys, 'd');
-
+    process_all_rounds(key, subkeys, buffer, 'd');
     buffer.fill(0);
-
     items_read = fscanf(file_in, "%2x", &hex_digits);
   }
 
@@ -284,14 +268,11 @@ int main(int argc, char ** argv) {
   }
   char option = *argv[1];
 
-  array<uint8_t, 10> key = get_key();
-  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
-
   if(option == 'e')
-    encrypt(subkeys);
+    encrypt();
 
   else
-    decrypt(subkeys);
+    decrypt();
 
   return 0;
 }
