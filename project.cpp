@@ -1,10 +1,5 @@
-#include<stdio.h>
-#include<math.h>
-#include<ios>
 #include<fstream>
 #include<iostream>
-#include<string>
-#include<bitset>
 #include<array>
 
 using namespace std;
