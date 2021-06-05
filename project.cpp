@@ -32,7 +32,7 @@ uint8_t get_byte(array<uint8_t, 10> key, int position){
   return key[i];
 }
 
-void rotate(array<uint8_t, 10> key){
+void rotate(array<uint8_t, 10>& key){
   //hold onto first bit that will be shifted out
   char rotate_bit = key[9] >> 7;
 
@@ -45,7 +45,7 @@ void rotate(array<uint8_t, 10> key){
   key[0] = key[0] << 1 | rotate_bit;
 }
 
-void gen_single_round_keys(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> subkeys, int round){
+void gen_single_round_keys(array<uint8_t, 10>& key, array<array<uint8_t, 12>, 20>& subkeys, int round){
   //find the 12 subkeys based on the current rotated key, rotate each round (12x)
   for(int i = 0; i < 12; i++){
     subkeys[round][i] = get_byte(key, 4*round + (i+4)%4);
@@ -54,7 +54,7 @@ void gen_single_round_keys(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20>
 }
 
 
-array<array<uint8_t, 12>, 20> gen_all_round_keys(array<uint8_t, 10> key){  
+array<array<uint8_t, 12>, 20> gen_all_round_keys(array<uint8_t, 10>& key){  
   array<array<uint8_t, 12>, 20> subkeys;
   rotate(key);
 
@@ -214,8 +214,9 @@ void encrypt(){
   // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
-  array<uint8_t, 10> key = get_key();
-  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
+  array<uint8_t, 10> start_key = get_key();
+  array<uint8_t, 10> key = start_key;
+  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
 
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
@@ -236,8 +237,9 @@ void decrypt(){
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   unsigned int hex_digits;
-  array<uint8_t, 10> key = get_key();
-  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
+  array<uint8_t, 10> start_key = get_key();
+  array<uint8_t, 10> key = start_key;
+  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
 
 
   int items_read = fscanf(file_in, "%2x", &hex_digits);
