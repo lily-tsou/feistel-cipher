@@ -196,31 +196,38 @@ void process_single_round(array<uint16_t, 4>& round_blocks, array<array<uint8_t,
 
 //TODO rename?
 array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
-    array<uint16_t, 4> hex_chars;
-    for(int i = 0; i < 4; i++){
-      hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-    }
+  array<uint16_t, 4> hex_chars;
+  for(int i = 0; i < 4; i++){
+    hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+  }
 
-    return hex_chars;
+  return hex_chars;
 }
 
-void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> subkeys){
-    array<uint16_t, 4> input = concat_chars_as_hex(buffer);
-    array<uint16_t, 4> round_blocks = get_whitened_blocks(input);
+void process_all_rounds(array<uint8_t, 8> buffer, array<array<uint8_t, 12>, 20> subkeys, char option){
+  array<uint16_t, 4> input = concat_chars_as_hex(buffer);
+  array<uint16_t, 4> round_blocks = get_whitened_blocks(input);
 
-    for(int i = 19; i > -1; i--){
+  if(option == 'd')
+    for(int i = 19; i > -1; i--)
       process_single_round(round_blocks, subkeys, i);
-    }
+  else if(option == 'e')
+    for(int i = 0; i < 20; i++)
+      process_single_round(round_blocks, subkeys, i);
 
-    array<uint16_t, 4> temp_blocks;
-    for(int i = 0; i < 4; i++){
-      temp_blocks[i] = round_blocks[(i+2)%4];
-    }
+  array<uint16_t, 4> temp_blocks;
+  for(int i = 0; i < 4; i++){
+    temp_blocks[i] = round_blocks[(i+2)%4];
+  }
 
-    array<uint16_t, 4> plaintext = get_whitened_blocks(temp_blocks);
-    write_file_as_ascii(plaintext);
-    
-    buffer.fill(0);
+  array<uint16_t, 4> processed_blocks = get_whitened_blocks(temp_blocks);
+  
+  if(option == 'd')
+    write_file_as_ascii(processed_blocks);
+  else if(option == 'e')
+    write_file_as_hex(processed_blocks);
+
+  buffer.fill(0);
 }
 
 void encrypt(array<array<uint8_t, 12>, 20> subkeys){
@@ -235,15 +242,7 @@ void encrypt(array<array<uint8_t, 12>, 20> subkeys){
     array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
     array<uint16_t, 4> round_blocks = get_whitened_blocks(plaintext_input);
 
-    for(int i = 0; i < 20; i++)
-      process_single_round(round_blocks, subkeys, i);
-
-    array<uint16_t, 4> temp_blocks;
-    for(int i = 0; i < 4; i++)
-      temp_blocks[i] = round_blocks[(i+2)%4];
-
-    array<uint16_t, 4> cipher = get_whitened_blocks(temp_blocks);
-    write_file_as_hex(cipher);
+    process_all_rounds(buffer, subkeys, 'e');
 
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
@@ -259,7 +258,7 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   unsigned int hex_digits;
-  
+
   int items_read = fscanf(file_in, "%2x", &hex_digits);
   while(items_read > 0){
     int i = 0;
@@ -270,8 +269,8 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
       i++;
     }
 
-    process_all_rounds(buffer, subkeys);
-    
+    process_all_rounds(buffer, subkeys, 'd');
+
     buffer.fill(0);
 
     items_read = fscanf(file_in, "%2x", &hex_digits);
