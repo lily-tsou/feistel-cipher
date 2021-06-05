@@ -261,17 +261,7 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
 
     //-------------BLOCK ENCRYPTION--------------//
     for(int i = 19; i > -1; i--){
-      unsigned short temp_r2 = round_blocks[0];
-      unsigned short temp_r3 = round_blocks[1];
-      unsigned short f0;
-      unsigned short f1;
-
-      F(subkeys, round_blocks[0], round_blocks[1], i, f0, f1);
-
-      round_blocks[0] = f0 ^ round_blocks[2];
-      round_blocks[1] = f1 ^ round_blocks[3];
-      round_blocks[2] = temp_r2;
-      round_blocks[3] = temp_r3;
+      process_round(round_blocks, subkeys, i);
     }
 
     for(int i = 0; i < 4; i++){
