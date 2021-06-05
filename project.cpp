@@ -266,9 +266,6 @@ int main(int argc, char ** argv) {
   }
   char option = *argv[1];
 
-  //array<uint8_t, 10> key = get_key();
-  //array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(key);
-
   if(option == 'e')
     encrypt();
 
