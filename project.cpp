@@ -257,35 +257,29 @@ void decrypt(array<array<uint8_t, 12>, 20> subkeys){
     }
 
     array<uint16_t, 4> cipher_input = concat_chars_as_hex(buffer);
-
-    //XOR W with key to create R0....R3
-    int key_i = 9;
-    for(int i = 0; i < 4; i++){
-      unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
-      r[i] = concat_k ^ cipher_input[i];
-    }
+    array<uint16_t, 4> round_blocks = get_whitened_blocks(cipher_input);
 
     //-------------BLOCK ENCRYPTION--------------//
     for(int i = 19; i > -1; i--){
-      unsigned short temp_r2 = r[0];
-      unsigned short temp_r3 = r[1];
+      unsigned short temp_r2 = round_blocks[0];
+      unsigned short temp_r3 = round_blocks[1];
       unsigned short f0;
       unsigned short f1;
 
-      F(subkeys, r[0], r[1], i, f0, f1);
+      F(subkeys, round_blocks[0], round_blocks[1], i, f0, f1);
 
-      r[0] = f0 ^ r[2];
-      r[1] = f1 ^ r[3];
-      r[2] = temp_r2;
-      r[3] = temp_r3;
+      round_blocks[0] = f0 ^ round_blocks[2];
+      round_blocks[1] = f1 ^ round_blocks[3];
+      round_blocks[2] = temp_r2;
+      round_blocks[3] = temp_r3;
     }
 
     for(int i = 0; i < 4; i++){
-      y[i] = r[(i+2)%4];
+      y[i] = round_blocks[(i+2)%4];
     }
 
     array<uint16_t, 4> plaintext;
-    key_i = 9;
+    int key_i = 9;
     for(int i = 0; i < 4; i++){
       unsigned short concat_k = unrotated_key[key_i--] << 8 | (unrotated_key[key_i--]);
       plaintext[i] = concat_k ^ y[i];
