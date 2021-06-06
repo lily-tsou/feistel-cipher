@@ -154,7 +154,6 @@ array<uint8_t, 10> get_key(){
   return key;
 }
 
-
 /*
   A single round of encryption/decryption
 
