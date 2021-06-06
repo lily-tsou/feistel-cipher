@@ -1,7 +1,6 @@
 #include <fstream>
 #include <iostream>
 #include <array>
-#include <string>
 #include "ftable.h"
 
 using namespace std;
