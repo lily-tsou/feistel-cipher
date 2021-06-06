@@ -3,6 +3,7 @@
 #include<array>
 
 using namespace std;
+
 const array<array<uint8_t, 16>, 16> FTABLE = 
 {{{0xa3,0xd7,0x09,0x83,0xf8,0x48,0xf6,0xf4,0xb3, 0x21,0x15,0x78,0x99,0xb1,0xaf,0xf9},
   {0xe7,0x2d,0x4d,0x8a,0xce,0x4c,0xca,0x2e,0x52,0x95,0xd9,0x1e,0x4e,0x38,0x44,0x28},
@@ -27,34 +28,35 @@ uint8_t get_byte(array<uint8_t, 10> key, int position){
   return key[i];
 }
 
-void rotate(array<uint8_t, 10>& key){
-  //hold onto first bit that will be shifted out
-  char rotate_bit = key[9] >> 7;
-
-  //shift all bytes and concatonate with the first bit of the byte to the right of it
+void left_rotate_one_bit(array<uint8_t, 10>& key){
+  uint8_t high_bit = key[9] >> 7;
   for(int i = 9; i > 0; i--){
     key[i] = (key[i] << 1) | key[i - 1] >> 7;
   }
-
-  //add the saved bit to the end of the key
-  key[0] = key[0] << 1 | rotate_bit;
+  key[0] = key[0] << 1 | high_bit;
 }
 
-void gen_single_round_keys(array<uint8_t, 10>& key, array<array<uint8_t, 12>, 20>& subkeys, int round){
-  //find the 12 subkeys based on the current rotated key, rotate each round (12x)
+/*
+  Generate 12 subkeys for a single round of encryption
+*/
+array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
+  array<uint8_t, 12> round_keys;
   for(int i = 0; i < 12; i++){
-    subkeys[round][i] = get_byte(key, 4*round + (i+4)%4);
-    rotate(key);
+    round_keys[i] = get_byte(key, 4*round + (i+4)%4);
+    left_rotate_one_bit(key);
   }
+  return round_keys;
 }
 
-
-array<array<uint8_t, 12>, 20> gen_all_round_keys(array<uint8_t, 10>& key){  
+/*
+  Generate subkeys for 20 rounds of encryption/decryption
+*/
+array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){  
   array<array<uint8_t, 12>, 20> subkeys;
-  rotate(key);
+  left_rotate_one_bit(key);
 
   for(int i = 0; i < 20; i++){
-    gen_single_round_keys(key, subkeys, i);
+    subkeys[i] = get_subkeys_for_round(key, i);
   }
 
   return subkeys;
@@ -194,7 +196,7 @@ void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> su
   }
 
   array<uint16_t, 4> processed_blocks = get_whitened_blocks(key, temp_blocks);
-  
+
   if(option == 'e')
     write_file_as_hex(processed_blocks);
   else if(option == 'd')
@@ -211,7 +213,7 @@ void encrypt(){
   buffer.fill(0);
   array<uint8_t, 10> start_key = get_key();
   array<uint8_t, 10> key = start_key;
-  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
+  array<array<uint8_t, 12>, 20> subkeys = get_all_subkeys(start_key);
 
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
@@ -234,7 +236,7 @@ void decrypt(){
   unsigned int hex_digits;
   array<uint8_t, 10> start_key = get_key();
   array<uint8_t, 10> key = start_key;
-  array<array<uint8_t, 12>, 20> subkeys = gen_all_round_keys(start_key);
+  array<array<uint8_t, 12>, 20> subkeys = get_all_subkeys(start_key);
 
 
   int items_read = fscanf(file_in, "%2x", &hex_digits);
