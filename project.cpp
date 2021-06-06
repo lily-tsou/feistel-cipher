@@ -1,6 +1,7 @@
 #include<fstream>
 #include<iostream>
 #include<array>
+#include<string>
 
 using namespace std;
 
@@ -22,7 +23,6 @@ const array<array<uint8_t, 16>, 16> FTABLE =
   {0x08,0x77,0x11,0xbe,0x92,0x4f,0x24,0xc5,0x32,0x36,0x9d,0xcf,0xf3,0xa6,0xbb,0xac},
   {0x5e,0x6c,0xa9,0x13,0x57,0x25,0xb5,0xe3,0xbd,0xa8,0x3a,0x01,0x05,0x59,0x2a,0x46}}};
 
-
 uint8_t get_byte(array<uint8_t, 10> key, int position){
   int i = position % 10;
   return key[i];
@@ -30,9 +30,10 @@ uint8_t get_byte(array<uint8_t, 10> key, int position){
 
 void left_rotate_one_bit(array<uint8_t, 10>& key){
   uint8_t high_bit = key[9] >> 7;
-  for(int i = 9; i > 0; i--){
+  
+  for(int i = 9; i > 0; i--)
     key[i] = (key[i] << 1) | key[i - 1] >> 7;
-  }
+  
   key[0] = key[0] << 1 | high_bit;
 }
 
@@ -41,10 +42,12 @@ void left_rotate_one_bit(array<uint8_t, 10>& key){
 */
 array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
   array<uint8_t, 12> round_keys;
+
   for(int i = 0; i < 12; i++){
     round_keys[i] = get_byte(key, 4*round + (i+4)%4);
     left_rotate_one_bit(key);
   }
+  
   return round_keys;
 }
 
@@ -55,9 +58,8 @@ array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){
   array<array<uint8_t, 12>, 20> subkeys;
   left_rotate_one_bit(key);
 
-  for(int i = 0; i < 20; i++){
+  for(int i = 0; i < 20; i++)
     subkeys[i] = get_subkeys_for_round(key, i);
-  }
 
   return subkeys;
 }
@@ -68,15 +70,10 @@ array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){
   the high-order 4 bits to index the row and the low order 4 bits to index
   the column.
 */
-uint8_t xor_ftable_with_g(array<array<uint8_t, 12>, 20> subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
-  //generage 8 bytes that correspond to the index
+uint8_t xor_ftable_with_g(array<array<uint8_t, 12>, 20> subkeys, uint8_t high_g, uint8_t low_g, int round, int key_index){
   uint8_t ftable_index = high_g ^ subkeys[round][key_index];
-
-  //split FTABLE index into two parts: i and j to index into the ftable
-  unsigned int i = ftable_index >> 4;
-  unsigned int j = ftable_index  & 0x0f;
-
-  //return the i,jth index of the FTABLE xor low_g
+  uint8_t i = ftable_index >> 4;
+  uint8_t j = ftable_index  & 0x0f;
   return FTABLE[i][j] ^ low_g;
 }
 
@@ -86,7 +83,7 @@ uint8_t xor_ftable_with_g(array<array<uint8_t, 12>, 20> subkeys, unsigned char h
   g2 = low 8 bits of block0
   Returns g5 concatenated with g6.
 */
-uint16_t get_g(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, int key_offset, int round){
+uint16_t get_g(array<array<uint8_t, 12>, 20> subkeys, uint16_t block0, int key_offset, int round){
   uint8_t g1 = short(block0 >> 8);
   uint8_t g2 = block0 & 0x00ff;
   uint8_t g3 = xor_ftable_with_g(subkeys, g2, g1, round, key_offset + 0);
@@ -101,7 +98,7 @@ uint16_t get_g(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, int
   F0 = (t0 + 2t1 + concatenate(key[8], key[9])) mod 2^16
   F1 = (2t0 + t1 + concatenate(key[10], key[11])) mod 2^16
 */
-array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, unsigned short block1, int round){ 
+array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, uint16_t block0, uint16_t block1, int round){ 
   array<uint16_t, 2> f;
   uint16_t t0 = get_g(subkeys, block0, 0, round);
   uint16_t t1 = get_g(subkeys, block1, 4, round);
@@ -134,17 +131,19 @@ array<uint8_t, 10> get_key(){
 */
 array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4>  input_blocks) {
   array<uint16_t, 4> output_blocks;
+
   int index = 9;
   for(int i = 0; i < 4; i++){
     uint16_t key_bytes = key[index--] << 8 | key[index--];
     output_blocks[i] = key_bytes ^ input_blocks[i];
   }
+
   return output_blocks;
 }
 
-void write_file_as_hex(array<uint16_t, 4> buffer){
+void write_file_as_hex(array<uint16_t, 4> buffer, char *output_file){
   FILE * file_out;
-  file_out = fopen("output.txt", "a");
+  file_out = fopen(output_file, "a");
 
   for (int i = 0; i < 4; i++)
     fprintf(file_out, "%04x", buffer[i]);
@@ -153,9 +152,9 @@ void write_file_as_hex(array<uint16_t, 4> buffer){
   fclose(file_out);
 }
 
-void write_file_as_ascii(array<uint16_t, 4> buffer){
+void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
   FILE * file_out;
-  file_out = fopen("output.txt", "a");
+  file_out = fopen(output_file, "a");
 
   for (int i = 0; i < 4; i++)
     fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
@@ -165,9 +164,10 @@ void write_file_as_ascii(array<uint16_t, 4> buffer){
 
 array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
   array<uint16_t, 4> hex_chars;
-  for(int i = 0; i < 4; i++){
+  
+  for(int i = 0; i < 4; i++)
     hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-  }
+  
   return hex_chars;
 }
 
@@ -199,7 +199,13 @@ void process_single_round(array<uint16_t, 4> round_blocks, array<array<uint8_t, 
   their last swap and are whitened again with the key before 
   being written to a file.
 */
-void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> subkeys, array<uint8_t, 8> buffer, char option){
+void process_all_rounds(
+  array<uint8_t, 10> key, 
+  array<array<uint8_t, 12>, 20> subkeys, 
+  array<uint8_t, 8> buffer, 
+  char option, 
+  char *output_file
+){
   array<uint16_t, 4> input = concat_chars_as_hex(buffer);
   array<uint16_t, 4> round_blocks = get_whitened_blocks(key, input);
 
@@ -207,20 +213,19 @@ void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> su
     for(int i = 0; i < 20; i++)
       process_single_round(round_blocks, subkeys, i);
   else if(option == 'd')
-    for(int i = 19; i > -1; i--)
+    for(int i = 19; i >= 0; i--)
       process_single_round(round_blocks, subkeys, i);
 
   array<uint16_t, 4> temp_blocks;
-  for(int i = 0; i < 4; i++){
+  for(int i = 0; i < 4; i++)
     temp_blocks[i] = round_blocks[(i+2)%4];
-  }
 
   array<uint16_t, 4> processed_blocks = get_whitened_blocks(key, temp_blocks);
 
   if(option == 'e')
-    write_file_as_hex(processed_blocks);
+    write_file_as_hex(processed_blocks, output_file);
   else if(option == 'd')
-    write_file_as_ascii(processed_blocks);
+    write_file_as_ascii(processed_blocks, output_file);
 
   buffer.fill(0);
 }
@@ -237,9 +242,9 @@ void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> su
   the end of the last block to extend it to be a multiple of 64. All padded
   bits will be 0s.
 */
-void encrypt(){
+void encrypt(char *input_file, char *output_file){
   FILE * file_in;
-  file_in = fopen("text.txt", "r");
+  file_in = fopen(input_file, "r");
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   array<uint8_t, 10> start_key = get_key();
@@ -249,7 +254,7 @@ void encrypt(){
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
     array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
-    process_all_rounds(key, subkeys, buffer, 'e');
+    process_all_rounds(key, subkeys, buffer, 'e', output_file);
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
   }
@@ -267,9 +272,9 @@ void encrypt(){
   on each block which will revert the bits to their original state prior to 
   encryption.
 */
-void decrypt(){
+void decrypt(char *input_file, char *output_file){
   FILE * file_in;
-  file_in = fopen("cipher.txt", "rt");
+  file_in = fopen(input_file, "rt");
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   unsigned int hex_digits;
@@ -287,7 +292,7 @@ void decrypt(){
       i++;
     }
 
-    process_all_rounds(key, subkeys, buffer, 'd');
+    process_all_rounds(key, subkeys, buffer, 'd', output_file);
     buffer.fill(0);
     items_read = fscanf(file_in, "%2x", &hex_digits);
   }
@@ -296,17 +301,21 @@ void decrypt(){
 }
 
 int main(int argc, char ** argv) {
-  if(argc < 2){
-    cout << "Must include e/d option." << endl;
+  if(argc < 4){
+    cout << "Must include [e]ncrypt or [d]ecrypt option " 
+      "and an input file and output file." << endl;
     return -1;
   }
+
   char option = *argv[1];
+  char* input_file = argv[2];  
+  char* output_file = argv[3];  
 
   if(option == 'e')
-    encrypt();
+    encrypt(input_file, output_file);
 
   else
-    decrypt();
+    decrypt(input_file, output_file);
 
   return 0;
 }
