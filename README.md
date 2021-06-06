@@ -8,7 +8,7 @@ For more on feistel ciphers, visit the [wikipedia](https://en.wikipedia.org/wiki
 ## To run:
 After compiling and creating a target (e.g., "feistel"): <br>
 ``./feistel [option] [file_in] [file_out]``<br>
-Option is either "e", indicating encryption, or "d", indicating decryption. <br>
+Option is either "e", indicating encryption, or "d", indicating decryption.  <br>
 file_in is the name of the file to be read and either encrypted or decrypted, and file_out is the where the resulting encrypted or decrypted text will be written. <br>
 For example: <br>
 ``./feistel e plaintext.txt cipher.txt``<br>
