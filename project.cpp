@@ -23,45 +23,25 @@ const array<array<uint8_t, 16>, 16> FTABLE =
   {0x08,0x77,0x11,0xbe,0x92,0x4f,0x24,0xc5,0x32,0x36,0x9d,0xcf,0xf3,0xa6,0xbb,0xac},
   {0x5e,0x6c,0xa9,0x13,0x57,0x25,0xb5,0xe3,0xbd,0xa8,0x3a,0x01,0x05,0x59,0x2a,0x46}}};
 
-uint8_t get_byte(array<uint8_t, 10> key, int position){
-  int i = position % 10;
-  return key[i];
+void write_file_as_hex(array<uint16_t, 4> buffer, char *output_file){
+  FILE * file_out;
+  file_out = fopen(output_file, "a");
+
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%04x", buffer[i]);
+  fprintf(file_out, "\n");
+
+  fclose(file_out);
 }
 
-void left_rotate_one_bit(array<uint8_t, 10>& key){
-  uint8_t high_bit = key[9] >> 7;
-  
-  for(int i = 9; i > 0; i--)
-    key[i] = (key[i] << 1) | key[i - 1] >> 7;
-  
-  key[0] = key[0] << 1 | high_bit;
-}
+void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
+  FILE * file_out;
+  file_out = fopen(output_file, "a");
 
-/*
-  Generate and return 12 subkeys for a single round of encryption
-*/
-array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
-  array<uint8_t, 12> round_keys;
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
 
-  for(int i = 0; i < 12; i++){
-    round_keys[i] = get_byte(key, 4*round + (i+4)%4);
-    left_rotate_one_bit(key);
-  }
-  
-  return round_keys;
-}
-
-/*
-  Generate and return subkeys for 20 rounds of encryption/decryption
-*/
-array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){  
-  array<array<uint8_t, 12>, 20> subkeys;
-  left_rotate_one_bit(key);
-
-  for(int i = 0; i < 20; i++)
-    subkeys[i] = get_subkeys_for_round(key, i);
-
-  return subkeys;
+  fclose(file_out);
 }
 
 /*
@@ -107,6 +87,72 @@ array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, uint16_t block0,
   return f;
 }
 
+void left_rotate_one_bit(array<uint8_t, 10>& key){
+  uint8_t high_bit = key[9] >> 7;
+  
+  for(int i = 9; i > 0; i--)
+    key[i] = (key[i] << 1) | key[i - 1] >> 7;
+  
+  key[0] = key[0] << 1 | high_bit;
+}
+
+uint8_t get_byte(array<uint8_t, 10> key, int position){
+  int i = position % 10;
+  return key[i];
+}
+
+/*
+  Whiten four blocks of 16-bit words with the first 64 bits of the key.
+*/
+array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4>  input_blocks) {
+  array<uint16_t, 4> output_blocks;
+
+  int index = 9;
+  for(int i = 0; i < 4; i++){
+    uint16_t key_bytes = key[index--] << 8 | key[index--];
+    output_blocks[i] = key_bytes ^ input_blocks[i];
+  }
+
+  return output_blocks;
+}
+
+
+array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
+  array<uint16_t, 4> hex_chars;
+  
+  for(int i = 0; i < 4; i++)
+    hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+  
+  return hex_chars;
+}
+
+/*
+  Generate and return 12 subkeys for a single round of encryption
+*/
+array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
+  array<uint8_t, 12> round_keys;
+
+  for(int i = 0; i < 12; i++){
+    round_keys[i] = get_byte(key, 4*round + (i+4)%4);
+    left_rotate_one_bit(key);
+  }
+  
+  return round_keys;
+}
+
+/*
+  Generate and return subkeys for 20 rounds of encryption/decryption
+*/
+array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){  
+  array<array<uint8_t, 12>, 20> subkeys;
+  left_rotate_one_bit(key);
+
+  for(int i = 0; i < 20; i++)
+    subkeys[i] = get_subkeys_for_round(key, i);
+
+  return subkeys;
+}
+
 array<uint8_t, 10> get_key(){
   FILE * key_in;
   key_in = fopen("key.txt", "rt");
@@ -126,50 +172,6 @@ array<uint8_t, 10> get_key(){
   return key;
 }
 
-/*
-  Whiten four blocks of 16-bit words with the first 64 bits of the key.
-*/
-array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4>  input_blocks) {
-  array<uint16_t, 4> output_blocks;
-
-  int index = 9;
-  for(int i = 0; i < 4; i++){
-    uint16_t key_bytes = key[index--] << 8 | key[index--];
-    output_blocks[i] = key_bytes ^ input_blocks[i];
-  }
-
-  return output_blocks;
-}
-
-void write_file_as_hex(array<uint16_t, 4> buffer, char *output_file){
-  FILE * file_out;
-  file_out = fopen(output_file, "a");
-
-  for (int i = 0; i < 4; i++)
-    fprintf(file_out, "%04x", buffer[i]);
-  fprintf(file_out, "\n");
-
-  fclose(file_out);
-}
-
-void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
-  FILE * file_out;
-  file_out = fopen(output_file, "a");
-
-  for (int i = 0; i < 4; i++)
-    fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
-
-  fclose(file_out);
-}
-
-array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
-  array<uint16_t, 4> hex_chars;
-  
-  for(int i = 0; i < 4; i++)
-    hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-  
-  return hex_chars;
-}
 
 /*
   A single round of encryption/decryption
