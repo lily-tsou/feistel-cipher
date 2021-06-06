@@ -33,7 +33,12 @@ void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
   the high-order 4 bits to index the row and the low order 4 bits to index
   the column.
 */
-uint8_t xor_ftable_with_g(array<array<uint8_t, 12>, 20> subkeys, uint8_t high_g, uint8_t low_g, int round, int key_index){
+uint8_t xor_ftable_with_g(
+  array<array<uint8_t, 12>, 20> subkeys, 
+  uint8_t high_g, uint8_t low_g, 
+  int round, 
+  int key_index
+){
   uint8_t ftable_index = high_g ^ subkeys[round][key_index];
   uint8_t i = ftable_index >> 4;
   uint8_t j = ftable_index  & 0x0f;
@@ -61,7 +66,12 @@ uint16_t get_g(array<array<uint8_t, 12>, 20> subkeys, uint16_t block0, int key_o
   F0 = (t0 + 2t1 + concatenate(key[8], key[9])) mod 2^16
   F1 = (2t0 + t1 + concatenate(key[10], key[11])) mod 2^16
 */
-array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, uint16_t block0, uint16_t block1, int round){ 
+array<uint16_t, 2> get_f(
+  array<array<uint8_t, 12>, 20> subkeys, 
+  uint16_t block0, 
+  uint16_t block1, 
+  int round
+){ 
   array<uint16_t, 2> f;
   uint16_t t0 = get_g(subkeys, block0, 0, round);
   uint16_t t1 = get_g(subkeys, block1, 4, round);
@@ -162,7 +172,11 @@ array<uint8_t, 10> get_key(){
   become positions 2 and 3.
 
 */
-void process_single_round(array<uint16_t, 4> round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
+void process_single_round(
+  array<uint16_t, 4> round_blocks, 
+  array<array<uint8_t, 12>, 20> subkeys, 
+  int round
+){
   uint16_t temp_r2 = round_blocks[0];
   uint16_t temp_r3 = round_blocks[1];
   array<uint16_t, 2> f = get_f(subkeys, round_blocks[0], round_blocks[1], round);
