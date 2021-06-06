@@ -6,4 +6,4 @@ For more on feistel ciphers, visit the [wikipedia](https://en.wikipedia.org/wiki
 
 ## To run:
 After compiling and creating a target (e.g., "feistel"):<br>
-./feistel [option] [file_in] [file_out]
+>./feistel [option] [file_in] [file_out]
