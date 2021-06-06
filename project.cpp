@@ -37,7 +37,7 @@ void left_rotate_one_bit(array<uint8_t, 10>& key){
 }
 
 /*
-  Generate 12 subkeys for a single round of encryption
+  Generate and return 12 subkeys for a single round of encryption
 */
 array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
   array<uint8_t, 12> round_keys;
@@ -49,7 +49,7 @@ array<uint8_t, 12> get_subkeys_for_round(array<uint8_t, 10>& key, int round){
 }
 
 /*
-  Generate subkeys for 20 rounds of encryption/decryption
+  Generate and return subkeys for 20 rounds of encryption/decryption
 */
 array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){  
   array<array<uint8_t, 12>, 20> subkeys;
@@ -62,50 +62,54 @@ array<array<uint8_t, 12>, 20> get_all_subkeys(array<uint8_t, 10>& key){
   return subkeys;
 }
 
-
-uint8_t find_ftable(array<array<uint8_t, 12>, 20> subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
+/*
+  Calculate the ftable index, and xor the value at that location with low_g.
+  The ftable index is found by xoring high_g with the key, and using
+  the high-order 4 bits to index the row and the low order 4 bits to index
+  the column.
+*/
+uint8_t xor_ftable_with_g(array<array<uint8_t, 12>, 20> subkeys, unsigned char high_g, unsigned char low_g, int round, int key_index){
   //generage 8 bytes that correspond to the index
-  uint8_t index = high_g ^ subkeys[round][key_index];
+  uint8_t ftable_index = high_g ^ subkeys[round][key_index];
 
   //split FTABLE index into two parts: i and j to index into the ftable
-  unsigned int i = index >> 4;
-  unsigned int j = index  & 0x0f;
+  unsigned int i = ftable_index >> 4;
+  unsigned int j = ftable_index  & 0x0f;
 
   //return the i,jth index of the FTABLE xor low_g
   return FTABLE[i][j] ^ low_g;
 }
 
-unsigned short G(array<array<uint8_t, 12>, 20> subkeys, unsigned short r0, int key_offset, int round){
-  uint8_t g1 = short(r0 >> 8);
-  uint8_t g2 = r0 & 0x00ff;
-  uint8_t g3 = find_ftable(subkeys, g2, g1, round, key_offset + 0);
-  uint8_t g4 = find_ftable(subkeys, g3, g2, round, key_offset + 1);
-  uint8_t g5 = find_ftable(subkeys, g4, g3, round, key_offset + 2);
-  uint8_t g6 = find_ftable(subkeys, g5, g4, round, key_offset + 3);
-
-  //concat g5 and g6 to return
+/*
+  Find G using the ftable, subkeys and block0 (the first block of the current round)
+  g1 = high 8 bits of block0
+  g2 = low 8 bits of block0
+  Returns g5 concatenated with g6.
+*/
+uint16_t get_g(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, int key_offset, int round){
+  uint8_t g1 = short(block0 >> 8);
+  uint8_t g2 = block0 & 0x00ff;
+  uint8_t g3 = xor_ftable_with_g(subkeys, g2, g1, round, key_offset + 0);
+  uint8_t g4 = xor_ftable_with_g(subkeys, g3, g2, round, key_offset + 1);
+  uint8_t g5 = xor_ftable_with_g(subkeys, g4, g3, round, key_offset + 2);
+  uint8_t g6 = xor_ftable_with_g(subkeys, g5, g4, round, key_offset + 3);
   return g5 << 8 | g6;
 }
 
-void F(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, unsigned short block1, int round, unsigned short &f0, unsigned short &f1){  
-  unsigned short t0 = G(subkeys, block0, 0, round);
-  unsigned short t1 = G(subkeys, block1, 4, round);
-
-  f0 = (t0 + (2*t1) + (subkeys[round][8] << 8 | subkeys[round][9])) % 65536;
-  f1 = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
-}
-
+/*
+  Uses a single round of subkeys to computer F0 and F1.
+  F0 = (t0 + 2t1 + concatenate(key[8], key[9])) mod 2^16
+  F1 = (2t0 + t1 + concatenate(key[10], key[11])) mod 2^16
+*/
 array<uint16_t, 2> get_f(array<array<uint8_t, 12>, 20> subkeys, unsigned short block0, unsigned short block1, int round){ 
   array<uint16_t, 2> f;
-  unsigned short t0 = G(subkeys, block0, 0, round);
-  unsigned short t1 = G(subkeys, block1, 4, round);
+  uint16_t t0 = get_g(subkeys, block0, 0, round);
+  uint16_t t1 = get_g(subkeys, block1, 4, round);
   f[0] = (t0 + (2*t1) + (subkeys[round][8] << 8 | subkeys[round][9])) % 65536;
   f[1] = ((2* t0) + t1 + (subkeys[round][10] << 8 | subkeys[round][11])) % 65536;
   return f;
 }
 
-//TODO change name (e.g. get_key_as_hex())
-//TODO Pass in file name? Open/close inside or outside of file?
 array<uint8_t, 10> get_key(){
   FILE * key_in;
   key_in = fopen("key.txt", "rt");
@@ -125,7 +129,9 @@ array<uint8_t, 10> get_key(){
   return key;
 }
 
-//TODO can use for decryption?
+/*
+  Whiten four blocks of 16-bit words with the first 64 bits of the key.
+*/
 array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4>  input_blocks) {
   array<uint16_t, 4> output_blocks;
   int index = 9;
@@ -136,7 +142,6 @@ array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4
   return output_blocks;
 }
 
-// TODO input file name as parameter?
 void write_file_as_hex(array<uint16_t, 4> buffer){
   FILE * file_out;
   file_out = fopen("output.txt", "a");
@@ -148,7 +153,6 @@ void write_file_as_hex(array<uint16_t, 4> buffer){
   fclose(file_out);
 }
 
-// TODO input file name as parameter?
 void write_file_as_ascii(array<uint16_t, 4> buffer){
   FILE * file_out;
   file_out = fopen("output.txt", "a");
@@ -159,6 +163,22 @@ void write_file_as_ascii(array<uint16_t, 4> buffer){
   fclose(file_out);
 }
 
+array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
+  array<uint16_t, 4> hex_chars;
+  for(int i = 0; i < 4; i++){
+    hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
+  }
+  return hex_chars;
+}
+
+/*
+  A single round of encryption/decryption
+
+  Pass blocks at positions 0 and 1 into f() and XOR the results with blocks at 
+  2 and 3 to become the new block position 1 and 2. The old block position 0 and 1 now 
+  become positions 2 and 3.
+
+*/
 void process_single_round(array<uint16_t, 4> round_blocks, array<array<uint8_t, 12>, 20> subkeys, int round){
   uint16_t temp_r2 = round_blocks[0];
   uint16_t temp_r3 = round_blocks[1];
@@ -169,16 +189,16 @@ void process_single_round(array<uint16_t, 4> round_blocks, array<array<uint8_t, 
   round_blocks[3] = temp_r3;
 }
 
-//TODO rename?
-array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
-  array<uint16_t, 4> hex_chars;
-  for(int i = 0; i < 4; i++){
-    hex_chars[i] = (buffer[i*2] << 8 | buffer[i*2+1]);
-  }
-
-  return hex_chars;
-}
-
+/*
+  Main Feistel cipher portion to run encryption and decryption.
+  Encryption and decryption are the same mechanisms, with
+  encryption using the keys in the order they were created and
+  decryption using the keys in reverse order.
+  All blocks are whitened at the start of their first round. After
+  encrption and decryption, the blocks are rearranged to undo
+  their last swap and are whitened again with the key before 
+  being written to a file.
+*/
 void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> subkeys, array<uint8_t, 8> buffer, char option){
   array<uint16_t, 4> input = concat_chars_as_hex(buffer);
   array<uint16_t, 4> round_blocks = get_whitened_blocks(key, input);
@@ -205,10 +225,21 @@ void process_all_rounds(array<uint8_t, 10> key, array<array<uint8_t, 12>, 20> su
   buffer.fill(0);
 }
 
+/*
+  Encrypt a file with a supplied 80-bit key.
+  Read the input plaintext file as ascii characters. The plaintext file must be 
+  read into an 8-bit buffer before concatenating together two groups of hex 
+  digits into 16-bit words in order to keep the bytes in order on a little 
+  endian machine.
+  Generate all subkeys for 20 rounds of encryption and call process_rounds() 
+  on each block.
+  If the input is not a multiple of 64-bits, then padding will be added to
+  the end of the last block to extend it to be a multiple of 64. All padded
+  bits will be 0s.
+*/
 void encrypt(){
   FILE * file_in;
   file_in = fopen("text.txt", "r");
-  // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   array<uint8_t, 10> start_key = get_key();
@@ -218,7 +249,6 @@ void encrypt(){
   int items_read = fread(&buffer, 1, 8, file_in);
   while(items_read > 0){
     array<uint16_t, 4>  plaintext_input = concat_chars_as_hex(buffer);
-    array<uint16_t, 4> round_blocks = get_whitened_blocks(key, plaintext_input);
     process_all_rounds(key, subkeys, buffer, 'e');
     buffer.fill(0);
     items_read = fread(&buffer, 1, 8, file_in);
@@ -227,17 +257,25 @@ void encrypt(){
   fclose(file_in);
 }
 
+/*
+  Decrypt a file with a supplied 80-bit key.
+  Read the input cipher file and key as hex. The cipher file must be read 
+  into an 8-bit buffer before concatenating together two groups of hex 
+  digits into 16-bits word in order to keep the bytes in order on a little 
+  endian machine.
+  Generate all subkeys for 20 rounds of decryption and call process_rounds() 
+  on each block which will revert the bits to their original state prior to 
+  encryption.
+*/
 void decrypt(){
   FILE * file_in;
   file_in = fopen("cipher.txt", "rt");
-  // A buffer is required for bytes to be read in order on a Little Endian machine
   array<uint8_t, 8>  buffer;
   buffer.fill(0);
   unsigned int hex_digits;
   array<uint8_t, 10> start_key = get_key();
   array<uint8_t, 10> key = start_key;
   array<array<uint8_t, 12>, 20> subkeys = get_all_subkeys(start_key);
-
 
   int items_read = fscanf(file_in, "%2x", &hex_digits);
   while(items_read > 0){
@@ -258,7 +296,6 @@ void decrypt(){
 }
 
 int main(int argc, char ** argv) {
-  //TODO make this mroe user friendly
   if(argc < 2){
     cout << "Must include e/d option." << endl;
     return -1;
