@@ -6,6 +6,16 @@
 
 using namespace std;
 
+void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
+  FILE * file_out;
+  file_out = fopen(output_file, "a");
+
+  for (int i = 0; i < 4; i++)
+    fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
+
+  fclose(file_out);
+}
+
 void write_file_as_hex(array<uint16_t, 4> buffer, char *output_file){
   FILE * file_out;
   file_out = fopen(output_file, "a");
@@ -13,16 +23,6 @@ void write_file_as_hex(array<uint16_t, 4> buffer, char *output_file){
   for (int i = 0; i < 4; i++)
     fprintf(file_out, "%04x", buffer[i]);
   fprintf(file_out, "\n");
-
-  fclose(file_out);
-}
-
-void write_file_as_ascii(array<uint16_t, 4> buffer, char *output_file){
-  FILE * file_out;
-  file_out = fopen(output_file, "a");
-
-  for (int i = 0; i < 4; i++)
-    fprintf(file_out, "%c%c", buffer[i] >> 8, buffer[i]);
 
   fclose(file_out);
 }
