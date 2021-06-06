@@ -116,7 +116,6 @@ array<uint16_t, 4> get_whitened_blocks(array<uint8_t, 10> key, array<uint16_t, 4
   return output_blocks;
 }
 
-
 array<uint16_t, 4> concat_chars_as_hex(array<uint8_t, 8> buffer){
   array<uint16_t, 4> hex_chars;
   
