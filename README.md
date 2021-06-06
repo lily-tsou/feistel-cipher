@@ -6,7 +6,7 @@ Please note that this project was created for educational purposes and should no
 For more on feistel ciphers, visit the [wikipedia](https://en.wikipedia.org/wiki/Feistel_cipher) page or watch this [video](https://www.youtube.com/watch?v=FGhj3CGxl8I).<br>
 
 ## To run:
-After compiling and creating a target (e.g., "feistel"):<br>
+After compiling and creating a target (e.g., "feistel"): <br>
 ``./feistel [option] [file_in] [file_out]``<br>
 Option is either "e", indicating encryption, or "d", indicating decryption. <br>
 file_in is the name of the file to be read and either encrypted or decrypted, and file_out is the where the resulting encrypted or decrypted text will be written. <br>
