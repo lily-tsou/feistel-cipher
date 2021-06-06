@@ -36,3 +36,4 @@ pract.cpp
 
 # Text files
 *.txt
+!key.txt
